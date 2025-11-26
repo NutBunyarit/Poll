@@ -35,20 +35,23 @@ const Dashboard = () => {
   };
 
   // ฟังก์ชันลบ Poll (แถมให้ตามปุ่มในรูป)
+// src/pages/Dashboard.jsx
+
+  // ฟังก์ชันลบ Poll
   const handleDelete = async (e, id) => {
-    e.stopPropagation(); // หยุดไม่ให้คลิกแล้วไปเปิด Dropdown
+    e.stopPropagation(); 
     if (!window.confirm("ยืนยันที่จะลบ Poll นี้?")) return;
 
     try {
-      // (ต้องมี API Delete รองรับที่ Backend: app.delete('/api/polls/:id', ...))
-      // await axios.delete(`http://localhost:3000/api/polls/${id}`);
+      // --- แก้ไขตรงนี้: เอา Comment ออก ---
       await axios.delete(`http://localhost:3000/api/polls/${id}`);
-      // ลบจากหน้าจอ (Simulate)
+      
+      // ลบจากหน้าจอ (Update State)
       setPolls(polls.filter(poll => poll._id !== id));
-      alert("ลบสำเร็จ (Demo UI Only)"); 
+      alert("ลบสำเร็จ เรียบร้อย! 🗑️"); 
     } catch (err) {
-        console.error(err);
-      alert("ลบไม่สำเร็จ");
+      console.error(err);
+      alert("เกิดข้อผิดพลาดในการลบ");
     }
   };
 

@@ -14,7 +14,7 @@ connectDB();
 app.use(bodyParser.json()); 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*'); 
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     next();
 });
@@ -159,6 +159,33 @@ app.post('/api/polls/:id/vote', async (req, res) => {
         }
         console.error(err.message);
         return res.status(500).send('Server Error during voting');
+    }
+});
+
+app.delete('/api/polls/:id', async (req, res) => {
+    try {
+        const pollId = req.params.id;
+
+        // ค้นหาและลบ Poll ตาม ID
+        const deletedPoll = await Poll.findByIdAndDelete(pollId);
+
+        // ถ้าหาไม่เจอ (หรือถูกลบไปแล้ว)
+        if (!deletedPoll) {
+            return res.status(404).json({ error: 'Poll not found' });
+        }
+
+        return res.status(200).json({ 
+            message: 'Poll deleted successfully', 
+            deletedId: pollId 
+        });
+
+    } catch (err) {
+        // กรณี ID ผิด Format (เช่น ส่งมาสั้นเกินไป)
+        if (err.kind === 'ObjectId') {
+             return res.status(400).json({ error: 'Invalid Poll ID format' });
+        }
+        console.error(err.message);
+        return res.status(500).send('Server Error during deletion');
     }
 });
 // ----------------------------------------------------------------------
