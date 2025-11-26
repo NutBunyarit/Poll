@@ -1,6 +1,6 @@
 /* Container หลักของ Sidebar */
 #side {
-    background-color: #f8f9fc; /* เปลี่ยนจาก lightgrey เป็นสีขาวอมเทาจางๆ เพื่อให้ดู Modern */
+    background-color: #fff; /* เปลี่ยนจาก lightgrey เป็นสีขาวอมเทาจางๆ เพื่อให้ดู Modern */
     height: 100vh;
     width: 280px; /* กำหนดความกว้างให้ชัดเจน */
     padding: 20px;
@@ -19,7 +19,7 @@
     background-color: white;
     border-radius: 12px;
     /* ตัดเงาออกเพื่อให้ดูแบนราบเหมือนในรูปต้นแบบ หรือใส่เงาจางมากๆ ก็ได้ */
-    border: 1px solid #eee;
+    /* border: 1px solid #eee; */
 }
 
 .avatar-wrapper img {
