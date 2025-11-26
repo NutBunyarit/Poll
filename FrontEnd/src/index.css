@@ -1,0 +1,43 @@
+/* index.css */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    overflow: hidden; /* ป้องกัน Scrollbar ซ้อน */
+}
+
+#main-layout {
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    /* กำหนดแถว: บน 80px, ล่าง auto (เต็มพื้นที่ที่เหลือ) */
+    grid-template-rows: 80px 1fr; 
+    /* กำหนดคอลัมน์: ซ้าย 280px, ขวา auto (เต็มพื้นที่ที่เหลือ) */
+    grid-template-columns: 321px 1fr; 
+    
+    /* จัดวางพื้นที่ */
+    grid-template-areas:
+        "n n"
+        "s c";
+}
+
+#nav {
+    grid-area: n;
+    background-color: white;
+    border-bottom: 1px solid #eee;
+    z-index: 10; /* ให้ Nav ลอยอยู่บนสุด */
+}
+
+#side {
+    grid-area: s;
+    overflow-y: auto; /* ถ้าเมนูเยอะให้เลื่อนได้ */
+    border-right: 1px solid #eee;
+}
+
+#contents {
+    grid-area: c;
+    overflow-y: auto; /* ให้เลื่อนเฉพาะเนื้อหา ไม่บังเมนู */
+    padding: 20px;
+    background-color: #f8f9fc;
+}

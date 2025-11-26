@@ -1,0 +1,111 @@
+/* Container หลักของ Sidebar */
+#side {
+    background-color: #f8f9fc; /* เปลี่ยนจาก lightgrey เป็นสีขาวอมเทาจางๆ เพื่อให้ดู Modern */
+    height: 100vh;
+    width: 280px; /* กำหนดความกว้างให้ชัดเจน */
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* --- User Card --- */
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background-color: white;
+    border-radius: 12px;
+    /* ตัดเงาออกเพื่อให้ดูแบนราบเหมือนในรูปต้นแบบ หรือใส่เงาจางมากๆ ก็ได้ */
+    border: 1px solid #eee;
+}
+
+.avatar-wrapper img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-info {
+    flex-grow: 1; /* ดันปุ่มจุด 3 จุดไปขวาสุด */
+}
+
+.user-name {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+}
+
+.user-role {
+    margin: 0;
+    font-size: 12px;
+    color: #888;
+}
+
+.menu-action {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+/* --- Menu Items Container --- */
+.side-menu-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* ระยะห่างระหว่างปุ่มเมนู */
+}
+
+/* --- ตัวปุ่มเมนู (Nav Item) --- */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    color: #555; /* สีไอคอนและตัวหนังสือปกติ */
+    transition: all 0.2s ease;
+    position: relative; /* เพื่อใช้จัดตำแหน่ง Indicator */
+}
+
+.nav-icon svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+}
+
+.nav-text {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+/* --- Hover State --- */
+.nav-item:hover {
+    background-color: #eaeef5;
+    color: #333;
+}
+
+/* --- Active State (ไฮไลท์สีม่วง) --- */
+.nav-item.active {
+    background-color: #f3f0ff; /* พื้นหลังสีม่วงอ่อน */
+    color: #7e3af2; /* สีตัวหนังสือและไอคอนสีม่วงเข้ม */
+    font-weight: 600;
+}
+
+/* --- แถบสีม่วงด้านซ้าย (Indicator) --- */
+/* เราสร้าง div แยกใน JSX แล้ว แต่ถ้าจะใช้ CSS ล้วนๆ ใช้ ::before ก็ได้ */
+.active-indicator {
+    position: absolute;
+    left: -20px; /* ขยับออกไปนอกกล่องเมนู */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 32px;
+    background-color: #7e3af2; /* สีเดียวกับตัวหนังสือ */
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
