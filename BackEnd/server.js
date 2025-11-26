@@ -1,196 +1,188 @@
-// server.js (ปรับปรุง)
 const express = require('express');
-const bodyParser = require('body-parser'); 
-const connectDB = require('./db'); // นำเข้าฟังก์ชันเชื่อมต่อ DB
-const Poll = require('./models/Poll'); // นำเข้าโมเดล Poll
+const cors = require('cors');
+const { Pool } = require('pg');
+const Redis = require('ioredis');
 
-const app = express();
-const PORT = 3000;
-
-// *** 1. เรียกใช้ฟังก์ชันเชื่อมต่อฐานข้อมูล ***
-connectDB();
-
-// Middleware (เหมือนเดิม)
-app.use(bodyParser.json()); 
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    next();
+// 1. ตั้งค่า PostgreSQL
+const pool = new Pool({
+  user: 'postgres',
+  host: 'localhost',
+  database: 'PollDB',
+  password: '1234',
+  port: 5432,
 });
 
+// 2. ตั้งค่า Redis (เชื่อมต่อไปที่ localhost:6379 ที่เราเปิด Docker ไว้)
+const redis = new Redis({
+  host: '127.0.0.1', 
+  port: 6379,
+  // retryStrategy: ถ้าต่อไม่ได้ ให้พยายามต่อใหม่เรื่อยๆ ทุก 2 วินาที
+  retryStrategy: (times) => Math.min(times * 50, 2000),
+});
+
+redis.on('error', (err) => {
+    console.error('❌ Redis Connection Error:', err.message);
+    // ไม่ Crash โปรแกรม แต่จะแจ้งเตือนแทน
+});
+
+redis.on('connect', () => {
+    console.log('✅ Connected to Redis successfully');
+});
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = 3000;
+
+// Helper: ฟังก์ชันล้าง Cache (เรียกใช้เมื่อมีการ สร้าง/โหวต/ลบ)
+const clearCache = async () => {
+    try {
+        await redis.del('polls:all');
+        console.log('🧹 Cache Cleared');
+    } catch (err) {
+        console.error('Cache Clear Error:', err);
+    }
+};
+
 // ----------------------------------------------------------------------
-// 🔗 API Endpoint 1: POST /api/polls (สร้าง Poll ใหม่ใน MongoDB)
+// 🔗 API 1: สร้าง Poll (POST) -> ล้าง Cache
 // ----------------------------------------------------------------------
 app.post('/api/polls', async (req, res) => {
     try {
-        const { 
-            pollTitle, 
-            description, 
-            startDate, 
-            endDate, 
-            optionA, 
-            optionB, 
-            votingOptions // ถ้ามีตัวเลือกเพิ่มเติม
-        } = req.body;
+        const { pollTitle, description, startDate, endDate, optionA, optionB, votingOptions } = req.body;
 
-        // ตรวจสอบข้อมูลที่จำเป็น
         if (!pollTitle || !startDate || !endDate || !optionA || !optionB) {
             return res.status(400).json({ error: 'Missing required fields.' });
         }
 
-        // เตรียม Map สำหรับ options (ตั้งค่าคะแนนโหวตเริ่มต้นเป็น 0)
         const optionsMap = {};
         optionsMap[optionA] = 0;
         optionsMap[optionB] = 0;
-
-        // เพิ่มตัวเลือกเพิ่มเติม (ถ้ามี)
         if (Array.isArray(votingOptions)) {
             votingOptions.forEach(opt => {
-                if (opt && typeof opt === 'string') {
-                    optionsMap[opt] = 0;
-                }
+                if (opt) optionsMap[opt] = 0;
             });
         }
 
-        const newPoll = new Poll({
-            pollTitle,
-            description,
-            startDate,
-            endDate,
-            options: optionsMap // ใช้ Map ที่เตรียมไว้
-        });
+        const query = `
+            INSERT INTO polls ("pollTitle", description, "startDate", "endDate", options)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id as "_id", "pollTitle", description, "startDate", "endDate", options
+        `;
+        
+        const values = [pollTitle, description, new Date(startDate), new Date(endDate), optionsMap];
+        const { rows } = await pool.query(query, values);
 
-        // บันทึกข้อมูลลงใน MongoDB
-        const createdPoll = await newPoll.save();
+        // 🔥 ล้าง Cache เพราะมีข้อมูลใหม่
+        await clearCache();
 
-        // ส่งข้อมูลที่ถูกบันทึกพร้อม ID ที่ MongoDB สร้างกลับไป
-        return res.status(201).json(createdPoll);
+        res.status(201).json(rows[0]);
 
     } catch (err) {
-        console.error(err.message);
-        return res.status(500).send('Server Error during poll creation');
+        console.error(err);
+        res.status(500).json({ error: 'Server Error' });
     }
 });
 
-
 // ----------------------------------------------------------------------
-// 🔗 API Endpoint 2: GET /api/polls (ดึงรายการ Poll ทั้งหมดจาก MongoDB)
+// 🔗 API 2: ดึง Polls (GET) -> เช็ค Cache ก่อน
 // ----------------------------------------------------------------------
 app.get('/api/polls', async (req, res) => {
     try {
-        // ค้นหา Polls ทั้งหมด
-        const allPolls = await Poll.find().sort({ createdAt: -1 }); // เรียงลำดับจากใหม่ไปเก่า
+        const cacheKey = 'polls:all';
 
-        return res.status(200).json(allPolls);
-
-    } catch (err) {
-        console.error(err.message);
-        return res.status(500).send('Server Error while fetching polls');
-    }
-});
-// server.js (เพิ่มในส่วน API Endpoints)
-
-// 🔗 API Endpoint 3: GET /api/polls/:id (ดึงรายละเอียด Poll เดี่ยว)
-app.get('/api/polls/:id', async (req, res) => {
-    try {
-        const pollId = req.params.id;
-        
-        // ค้นหา Poll ด้วย ID ที่ได้มาจาก URL parameter
-        const poll = await Poll.findById(pollId);
-
-        if (!poll) {
-            return res.status(404).json({ error: 'Poll not found' });
+        // 1. ⚡ ลองดึงจาก Redis ก่อน
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log('⚡ Returning from Redis Cache');
+            return res.json(JSON.parse(cached));
         }
 
-        return res.status(200).json(poll);
+        // 2. 🐘 ถ้าไม่มี ให้ดึงจาก PostgreSQL
+        const query = `
+            SELECT id as "_id", "pollTitle", description, "startDate", "endDate", options 
+            FROM polls 
+            ORDER BY "createdAt" DESC
+        `;
+        const { rows } = await pool.query(query);
+
+        // 3. 💾 บันทึกลง Redis (เก็บไว้ 60 วินาที)
+        // ตรวจสอบว่ามีข้อมูลไหมก่อน set
+        if (rows) {
+            await redis.setex(cacheKey, 60, JSON.stringify(rows));
+        }
+
+        console.log('🐘 Returning from PostgreSQL');
+        res.json(rows);
 
     } catch (err) {
-        // เช่น ถ้า ID ที่ส่งมามี format ที่ไม่ถูกต้องของ MongoDB
-        if (err.kind === 'ObjectId') {
-             return res.status(400).json({ error: 'Invalid Poll ID format' });
-        }
-        console.error(err.message);
-        return res.status(500).send('Server Error while fetching single poll');
+        console.error(err);
+        res.status(500).json({ error: 'Server Error' });
     }
 });
-// server.js (เพิ่มในส่วน API Endpoints)
 
-// 🔗 API Endpoint 4: POST /api/polls/:id/vote (บันทึกการโหวต)
+// ----------------------------------------------------------------------
+// 🔗 API 3: โหวต (POST Vote) -> ล้าง Cache
+// ----------------------------------------------------------------------
 app.post('/api/polls/:id/vote', async (req, res) => {
     try {
         const pollId = req.params.id;
-        const { selectedOption } = req.body; // สิ่งที่ Front-End ส่งมา
+        const { selectedOption } = req.body;
 
-        if (!selectedOption) {
-            return res.status(400).json({ error: 'Selected option is required' });
+        const checkQuery = `SELECT options FROM polls WHERE id = $1`;
+        const { rows } = await pool.query(checkQuery, [pollId]);
+
+        if (rows.length === 0) return res.status(404).json({ error: 'Poll not found' });
+
+        const currentOptions = rows[0].options;
+        if (currentOptions[selectedOption] === undefined) {
+            return res.status(400).json({ error: 'Invalid option' });
         }
 
-        // 1. ค้นหา Poll
-        const poll = await Poll.findById(pollId);
+        currentOptions[selectedOption] += 1;
 
-        if (!poll) {
-            return res.status(404).json({ error: 'Poll not found' });
-        }
+        const updateQuery = `
+            UPDATE polls 
+            SET options = $1 
+            WHERE id = $2 
+            RETURNING id as "_id", options
+        `;
+        const updateResult = await pool.query(updateQuery, [currentOptions, pollId]);
 
-        // 2. ตรวจสอบว่าตัวเลือกถูกต้องหรือไม่
-        const currentOptions = poll.options;
+        // 🔥 ล้าง Cache เพื่อให้คนอื่นเห็นคะแนนล่าสุดทันที
+        await clearCache();
 
-        if (currentOptions.get(selectedOption) === undefined) {
-             return res.status(400).json({ error: `Invalid option: ${selectedOption}` });
-        }
-
-        // 3. อัปเดตจำนวนโหวต
-        // เพิ่มคะแนนโหวตให้ตัวเลือกที่ถูกเลือกไป 1
-        currentOptions.set(selectedOption, currentOptions.get(selectedOption) + 1);
-        
-        // 4. บันทึกการเปลี่ยนแปลงกลับไปที่ฐานข้อมูล
-        await poll.save();
-
-        // 5. ส่งผลลัพธ์ใหม่กลับไป (หรือแค่สถานะสำเร็จ)
-        return res.status(200).json({ 
-            message: 'Vote successful', 
-            updatedPoll: poll // ส่ง Poll ที่อัปเดตกลับไปให้ Front-End โชว์ผลทันที
-        });
+        res.json({ message: 'Vote successful', updatedPoll: updateResult.rows[0] });
 
     } catch (err) {
-        if (err.kind === 'ObjectId') {
-             return res.status(400).json({ error: 'Invalid Poll ID format' });
-        }
-        console.error(err.message);
-        return res.status(500).send('Server Error during voting');
+        console.error(err);
+        res.status(500).json({ error: 'Server Error' });
     }
 });
 
+// ----------------------------------------------------------------------
+// 🔗 API 4: ลบ (DELETE) -> ล้าง Cache
+// ----------------------------------------------------------------------
 app.delete('/api/polls/:id', async (req, res) => {
     try {
         const pollId = req.params.id;
+        const query = 'DELETE FROM polls WHERE id = $1 RETURNING id';
+        const { rows } = await pool.query(query, [pollId]);
 
-        // ค้นหาและลบ Poll ตาม ID
-        const deletedPoll = await Poll.findByIdAndDelete(pollId);
+        if (rows.length === 0) return res.status(404).json({ error: 'Poll not found' });
 
-        // ถ้าหาไม่เจอ (หรือถูกลบไปแล้ว)
-        if (!deletedPoll) {
-            return res.status(404).json({ error: 'Poll not found' });
-        }
-
-        return res.status(200).json({ 
-            message: 'Poll deleted successfully', 
-            deletedId: pollId 
-        });
+        // 🔥 ล้าง Cache
+        await clearCache();
+        
+        res.json({ message: 'Poll deleted successfully', deletedId: pollId });
 
     } catch (err) {
-        // กรณี ID ผิด Format (เช่น ส่งมาสั้นเกินไป)
-        if (err.kind === 'ObjectId') {
-             return res.status(400).json({ error: 'Invalid Poll ID format' });
-        }
-        console.error(err.message);
-        return res.status(500).send('Server Error during deletion');
+        console.error(err);
+        res.status(500).json({ error: 'Server Error' });
     }
 });
-// ----------------------------------------------------------------------
-// เริ่มต้น Server
-// ----------------------------------------------------------------------
+
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Backend (Postgres + Redis) Running on http://localhost:${PORT}`);
 });
